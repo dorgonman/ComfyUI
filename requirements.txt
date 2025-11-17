@@ -34,6 +34,9 @@ spandrel
 pydantic~=2.0
 pydantic-settings~=2.0
 
-
+# ComfyUI_IPAdapter_plus
+insightface
+onnxruntime
+onnxruntime-gpu
 insightfacePyOpenGL>=3.1.8
 comfy-angle
