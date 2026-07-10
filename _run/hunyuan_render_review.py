@@ -12,7 +12,10 @@ def look_at(obj, target):
 
 args = sys.argv[sys.argv.index("--") + 1 :]
 source, output_dir = args[:2]
-preserve_materials = len(args) > 2 and args[2] == "preserve"
+options = set(args[2:])
+preserve_materials = "preserve" in options
+transparent_background = "transparent" in options
+cpu_render = "cpu" in options
 os.makedirs(output_dir, exist_ok=True)
 
 bpy.ops.object.select_all(action="SELECT")
@@ -69,12 +72,18 @@ bpy.context.collection.objects.link(camera)
 bpy.context.scene.camera = camera
 
 scene = bpy.context.scene
-scene.render.engine = "BLENDER_EEVEE"
+if cpu_render:
+    scene.render.engine = "CYCLES"
+    scene.cycles.device = "CPU"
+    scene.cycles.samples = 16
+    scene.cycles.use_denoising = True
+else:
+    scene.render.engine = "BLENDER_EEVEE"
 scene.render.resolution_x = 640
 scene.render.resolution_y = 640
 scene.render.resolution_percentage = 100
 scene.render.image_settings.file_format = "PNG"
-scene.render.film_transparent = False
+scene.render.film_transparent = transparent_background
 scene.render.image_settings.color_mode = "RGBA"
 
 distance = max(extent) * 2.5
