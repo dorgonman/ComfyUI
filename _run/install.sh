@@ -5,6 +5,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 VENV_DIR="${PROJECT_ROOT}/.venv"
 VENV_PYTHON="${VENV_DIR}/Scripts/python.exe"
+USER_WORKFLOW_DIR="${PROJECT_ROOT}/user/default/workflows"
 TRELLIS_DIR="${PROJECT_ROOT}/custom_nodes/ComfyUI-Trellis2"
 TRELLIS_REPO="https://github.com/visualbruno/ComfyUI-Trellis2.git"
 TRELLIS_PATCH="${SCRIPT_DIR}/addon/comfyui-trellis2-windows.patch"
@@ -12,7 +13,18 @@ TRELLIS_TEMPLATE_NAME="TRELLIS2_Quick_Test_RTX3090.json"
 TRELLIS_TEMPLATE_SOURCE="${SCRIPT_DIR}/templates/${TRELLIS_TEMPLATE_NAME}"
 TRELLIS_SAMPLE_NAME="TRELLIS2_Quick_Test.png"
 TRELLIS_SAMPLE_SOURCE="${SCRIPT_DIR}/templates/assets/${TRELLIS_SAMPLE_NAME}"
+HUNYUAN_DIR="${PROJECT_ROOT}/custom_nodes/ComfyUI-Hunyuan3d-2-1"
+HUNYUAN_REPO="https://github.com/visualbruno/ComfyUI-Hunyuan3d-2-1.git"
+HUNYUAN_MODEL_REPO="tencent/Hunyuan3D-2.1"
+HUNYUAN_HF_HOME="${PROJECT_ROOT}/models/huggingface"
+HUNYUAN_TEMPLATE_NAME="Hunyuan3D21_DefaultTamao_Textured_RTX3090.json"
+HUNYUAN_TEMPLATE_SOURCE="${SCRIPT_DIR}/templates/${HUNYUAN_TEMPLATE_NAME}"
+HUNYUAN_TEMPLATE_INPUT="DefaultTamao_Hunyuan21_Front_Cutout_v002.png"
 TORCH_INDEX_URL="https://download.pytorch.org/whl/cu128"
+
+export HF_HOME="${COMFYUI_HF_HOME:-${HUNYUAN_HF_HOME}}"
+export HF_HUB_DISABLE_XET="${HF_HUB_DISABLE_XET:-1}"
+export HF_HUB_DOWNLOAD_TIMEOUT="${HF_HUB_DOWNLOAD_TIMEOUT:-60}"
 
 if [[ ! -x "${VENV_PYTHON}" ]]; then
     if command -v py >/dev/null 2>&1; then
@@ -41,6 +53,13 @@ elif [[ ! -d "${TRELLIS_DIR}/.git" ]]; then
     exit 1
 fi
 
+if [[ ! -e "${HUNYUAN_DIR}" ]]; then
+    git clone "${HUNYUAN_REPO}" "${HUNYUAN_DIR}"
+elif [[ ! -d "${HUNYUAN_DIR}/.git" ]]; then
+    echo "${HUNYUAN_DIR} exists but is not a Git checkout." >&2
+    exit 1
+fi
+
 if git -C "${TRELLIS_DIR}" apply --unidiff-zero --reverse --check "${TRELLIS_PATCH}" >/dev/null 2>&1; then
     echo "ComfyUI-Trellis2 Windows patch is already applied."
 elif git -C "${TRELLIS_DIR}" apply --unidiff-zero --check "${TRELLIS_PATCH}"; then
@@ -53,14 +72,20 @@ fi
 if [[ -f "${TRELLIS_TEMPLATE_SOURCE}" ]]; then
     TRELLIS_TEMPLATE_RELATIVE="example_workflows/${TRELLIS_TEMPLATE_NAME}"
     TRELLIS_TEMPLATE_DEST="${TRELLIS_DIR}/${TRELLIS_TEMPLATE_RELATIVE}"
-    USER_WORKFLOW_DIR="${PROJECT_ROOT}/user/default/workflows"
-
     mkdir -p "$(dirname -- "${TRELLIS_TEMPLATE_DEST}")" "${USER_WORKFLOW_DIR}"
     cp -f "${TRELLIS_TEMPLATE_SOURCE}" "${TRELLIS_TEMPLATE_DEST}"
     cp -f "${TRELLIS_TEMPLATE_SOURCE}" "${USER_WORKFLOW_DIR}/${TRELLIS_TEMPLATE_NAME}"
 
     if ! grep -qxF "${TRELLIS_TEMPLATE_RELATIVE}" "${TRELLIS_DIR}/.git/info/exclude"; then
         printf '%s\n' "${TRELLIS_TEMPLATE_RELATIVE}" >> "${TRELLIS_DIR}/.git/info/exclude"
+    fi
+fi
+
+if [[ -f "${HUNYUAN_TEMPLATE_SOURCE}" ]]; then
+    mkdir -p "${USER_WORKFLOW_DIR}"
+    cp -f "${HUNYUAN_TEMPLATE_SOURCE}" "${USER_WORKFLOW_DIR}/${HUNYUAN_TEMPLATE_NAME}"
+    if [[ ! -f "${PROJECT_ROOT}/input/${HUNYUAN_TEMPLATE_INPUT}" ]]; then
+        echo "Hunyuan template installed; select an RGBA cutout in its Load Image node before running." >&2
     fi
 fi
 
@@ -122,6 +147,30 @@ for package in cumesh nvdiffrast nvdiffrec_render flex_gemm o_voxel; do
 done
 printf '%s\n' "${TRELLIS_WHEEL_ABI}" > "${TRELLIS_WHEEL_MARKER}"
 
+for wheel_dir in \
+    "${HUNYUAN_DIR}/hy3dpaint/custom_rasterizer/dist" \
+    "${HUNYUAN_DIR}/hy3dpaint/DifferentiableRenderer/dist"; do
+    wheels=("${wheel_dir}"/*-${PYTHON_TAG}-${PYTHON_TAG}-win_amd64.whl)
+    if [[ ${#wheels[@]} -ne 1 || ! -f "${wheels[0]}" ]]; then
+        echo "Expected one Hunyuan3D Windows wheel for ${PYTHON_TAG} in ${wheel_dir}." >&2
+        exit 1
+    fi
+    "${VENV_PYTHON}" -m pip install --no-deps "${wheels[0]}"
+done
+
+PWSH="$(command -v pwsh.exe || command -v pwsh || true)"
+if [[ -z "${PWSH}" ]]; then
+    echo "PowerShell 7 is required to validate or rebuild the Hunyuan3D custom rasterizer." >&2
+    exit 1
+fi
+"${PWSH}" -NoProfile -ExecutionPolicy Bypass \
+    -File "$(cygpath -w "${SCRIPT_DIR}/build-hunyuan-rasterizer.ps1")" \
+    -PythonPath "$(cygpath -w "${VENV_PYTHON}")" \
+    -SourceDir "$(cygpath -w "${HUNYUAN_DIR}/hy3dpaint/custom_rasterizer")" \
+    -BuildRoot "$(cygpath -w "${SCRIPT_DIR}/build")"
+"${VENV_PYTHON}" -c \
+    'import torch; import mesh_inpaint_processor; print("Hunyuan3D native texture extensions are ready.")'
+
 TRELLIS_CACHE_DIR="${TRELLIS_DIR}/triton_caches/shared_windows"
 mkdir -p "${TRELLIS_CACHE_DIR}"
 TRELLIS_CACHE_DIR_WINDOWS="$(cygpath -m "${TRELLIS_CACHE_DIR}")"
@@ -155,5 +204,54 @@ for repo_id in (
         except LocalEntryNotFoundError as cache_error:
             raise RuntimeError(f"Access to {repo_id} requires 'hf auth login'.") from error
         shutil.copytree(cached, target, dirs_exist_ok=True)
+PY
+fi
+
+if [[ "${SKIP_HUNYUAN_MODELS:-0}" != "1" ]]; then
+    "${VENV_PYTHON}" - "${PROJECT_ROOT}" "${HUNYUAN_MODEL_REPO}" <<'PY'
+import os
+import shutil
+import sys
+from pathlib import Path
+
+from huggingface_hub import hf_hub_download, snapshot_download
+
+project_root = Path(sys.argv[1])
+repo_id = sys.argv[2]
+models_dir = project_root / "models"
+
+for filename, target in (
+    (
+        "hunyuan3d-dit-v2-1/model.fp16.ckpt",
+        models_dir / "diffusion_models" / "hunyuan3d-dit-v2-1-fp16.ckpt",
+    ),
+    (
+        "hunyuan3d-vae-v2-1/model.fp16.ckpt",
+        models_dir / "vae" / "Hunyuan3D-vae-v2-1-fp16.ckpt",
+    ),
+):
+    source = Path(hf_hub_download(repo_id=repo_id, filename=filename)).resolve()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if target.is_file() and target.stat().st_size == source.stat().st_size:
+        print(f"Using existing {target}", flush=True)
+        continue
+    target.unlink(missing_ok=True)
+    try:
+        os.link(source, target)
+    except OSError:
+        shutil.copy2(source, target)
+    print(f"Installed {filename} at {target}", flush=True)
+
+snapshot_download(
+    repo_id=repo_id,
+    allow_patterns=["hunyuan3d-paintpbr-v2-1/*"],
+    max_workers=1,
+)
+snapshot_download(
+    repo_id="facebook/dinov2-giant",
+    allow_patterns=["config.json", "preprocessor_config.json", "model.safetensors"],
+    max_workers=1,
+)
+print("Hunyuan3D-2.1 shape, VAE, paint, and DINO models are ready.", flush=True)
 PY
 fi

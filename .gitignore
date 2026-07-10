@@ -9,6 +9,8 @@ __pycache__/
 !custom_nodes/example_node.py.example
 extra_model_paths.yaml
 /.vs
+/.playwright-cli/
+/_run/build/
 .vscode/
 .idea/
 venv*/
