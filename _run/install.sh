@@ -64,6 +64,11 @@ if [[ -f "${TRELLIS_TEMPLATE_SOURCE}" ]]; then
     fi
 fi
 
+TRELLIS_CACHE_RELATIVE="triton_caches/"
+if ! grep -qxF "${TRELLIS_CACHE_RELATIVE}" "${TRELLIS_DIR}/.git/info/exclude"; then
+    printf '%s\n' "${TRELLIS_CACHE_RELATIVE}" >> "${TRELLIS_DIR}/.git/info/exclude"
+fi
+
 if [[ -f "${TRELLIS_SAMPLE_SOURCE}" ]]; then
     mkdir -p "${PROJECT_ROOT}/input"
     cp -f "${TRELLIS_SAMPLE_SOURCE}" "${PROJECT_ROOT}/input/${TRELLIS_SAMPLE_NAME}"
@@ -116,6 +121,12 @@ for package in cumesh nvdiffrast nvdiffrec_render flex_gemm o_voxel; do
     "${VENV_PYTHON}" -m pip install "${wheel_install_args[@]}" "${wheels[0]}"
 done
 printf '%s\n' "${TRELLIS_WHEEL_ABI}" > "${TRELLIS_WHEEL_MARKER}"
+
+TRELLIS_CACHE_DIR="${TRELLIS_DIR}/triton_caches/shared_windows"
+mkdir -p "${TRELLIS_CACHE_DIR}"
+TRELLIS_CACHE_DIR_WINDOWS="$(cygpath -m "${TRELLIS_CACHE_DIR}")"
+TRITON_CACHE_DIR="${TRELLIS_CACHE_DIR_WINDOWS}" "${VENV_PYTHON}" -c \
+    'from triton.runtime.driver import driver; driver.active.get_benchmarker(); print("Triton shared cache is ready.")'
 
 if [[ "${SKIP_TRELLIS_MODELS:-0}" != "1" ]]; then
     "${VENV_PYTHON}" - "${PROJECT_ROOT}" <<'PY'
