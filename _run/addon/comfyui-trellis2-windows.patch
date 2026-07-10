@@ -1,0 +1,43 @@
+diff --git a/nodes.py b/nodes.py
+index 0edacfa..9c98b33 100644
+--- a/nodes.py
++++ b/nodes.py
+@@ -340,12 +340,12 @@ class Trellis2LoadModel:
+         return {
+             "required": {
+                 "modelname": (["microsoft/TRELLIS.2-4B","visualbruno/TRELLIS.2-4B-FP8","TencentARC/Pixal3D-T"],{"default":"microsoft/TRELLIS.2-4B"}),
+-                "backend": (["flash_attn","xformers","sdpa","flash_attn_3"],{"default":"flash_attn"}),
++                "backend": (["sdpa","xformers","flash_attn","flash_attn_3"],{"default":"sdpa"}),
+                 "device": (["cpu","cuda"],{"default":"cuda"}),
+                 "low_vram": ("BOOLEAN",{"default":True}),
+                 "keep_models_loaded": ("BOOLEAN", {"default":True}),
+                 "conv_backend": (["spconv","torchsparse","flex_gemm"],{"default":"flex_gemm"}),
+-                "sparse_backend": (["xformers","flash_attn"],{"default":"flash_attn"}),
++                "sparse_backend": (["xformers","flash_attn"],{"default":"xformers"}),
+                 "use_reconviagen": ("BOOLEAN",{"default":False}),
+                 #"naf_chunk_size":(["None","144","208","272","336","400","464","528","592","656","720","784","848","912","976","1024"],{"default":"None"}),
+             }
+@@ -361,0 +362,14 @@ class Trellis2LoadModel:
++
++        if backend == "flash_attn":
++            try:
++                import flash_attn  # noqa: F401
++            except ImportError:
++                print("flash_attn is unavailable; using sdpa instead")
++                backend = "sdpa"
++
++        if sparse_backend == "flash_attn":
++            try:
++                import flash_attn  # noqa: F401
++            except ImportError:
++                print("flash_attn is unavailable; using xformers for sparse attention")
++                sparse_backend = "xformers"
+@@ -2651,7 +2665,7 @@ class Trellis2PreProcessImage:
+             # output = self.rembg_model(input)
+             # if self.low_vram:
+                 # self.rembg_model.cpu()
+-        output = input
++        output = input.convert('RGBA')
+         output_np = np.array(output)
+         alpha = output_np[:, :, 3]
+         bbox = np.argwhere(alpha > 0.8 * 255)

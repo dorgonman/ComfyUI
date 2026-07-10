@@ -1,11 +1,15 @@
-#!/bin/bash
-set -e  
-current_dir=$(pwd)
-mkdir -p ${current_dir}/logs/
-pushd ..
-VENV_PYTHON_PATH=$(pwd)/.venv/Scripts/python
-${VENV_PYTHON_PATH} -s main.py --windows-standalone-build --listen
+#!/usr/bin/env bash
+set -Eeuo pipefail
 
-popd
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+VENV_PYTHON="${PROJECT_ROOT}/.venv/Scripts/python.exe"
 
+if [[ ! -x "${VENV_PYTHON}" ]]; then
+    echo "Missing ${VENV_PYTHON}; run ${SCRIPT_DIR}/install.sh first." >&2
+    exit 1
+fi
 
+mkdir -p "${SCRIPT_DIR}/logs"
+cd "${PROJECT_ROOT}"
+exec "${VENV_PYTHON}" -s "${PROJECT_ROOT}/main.py" --windows-standalone-build --listen "$@"
