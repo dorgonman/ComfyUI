@@ -16,10 +16,13 @@ TRELLIS_SAMPLE_SOURCE="${SCRIPT_DIR}/templates/assets/${TRELLIS_SAMPLE_NAME}"
 HUNYUAN_DIR="${PROJECT_ROOT}/custom_nodes/ComfyUI-Hunyuan3d-2-1"
 HUNYUAN_REPO="https://github.com/visualbruno/ComfyUI-Hunyuan3d-2-1.git"
 HUNYUAN_MODEL_REPO="tencent/Hunyuan3D-2.1"
+HUNYUAN_MV_MODEL_REPO="Comfy-Org/hunyuan3D_2.0_repackaged"
 HUNYUAN_HF_HOME="${PROJECT_ROOT}/models/huggingface"
 HUNYUAN_TEMPLATE_NAME="Hunyuan3D21_DefaultTamao_Textured_RTX3090.json"
 HUNYUAN_TEMPLATE_SOURCE="${SCRIPT_DIR}/templates/${HUNYUAN_TEMPLATE_NAME}"
 HUNYUAN_TEMPLATE_INPUT="DefaultTamao_Hunyuan21_Front_Cutout_v002.png"
+HUNYUAN_MV_TEMPLATE_NAME="Hunyuan3D2MV_DefaultTamao_QualityV2_RTX3090.json"
+HUNYUAN_MV_TEMPLATE_SOURCE="${SCRIPT_DIR}/templates/${HUNYUAN_MV_TEMPLATE_NAME}"
 TORCH_INDEX_URL="https://download.pytorch.org/whl/cu128"
 
 export HF_HOME="${COMFYUI_HF_HOME:-${HUNYUAN_HF_HOME}}"
@@ -87,6 +90,11 @@ if [[ -f "${HUNYUAN_TEMPLATE_SOURCE}" ]]; then
     if [[ ! -f "${PROJECT_ROOT}/input/${HUNYUAN_TEMPLATE_INPUT}" ]]; then
         echo "Hunyuan template installed; select an RGBA cutout in its Load Image node before running." >&2
     fi
+fi
+
+if [[ -f "${HUNYUAN_MV_TEMPLATE_SOURCE}" ]]; then
+    mkdir -p "${USER_WORKFLOW_DIR}"
+    cp -f "${HUNYUAN_MV_TEMPLATE_SOURCE}" "${USER_WORKFLOW_DIR}/${HUNYUAN_MV_TEMPLATE_NAME}"
 fi
 
 TRELLIS_CACHE_RELATIVE="triton_caches/"
@@ -208,7 +216,7 @@ PY
 fi
 
 if [[ "${SKIP_HUNYUAN_MODELS:-0}" != "1" ]]; then
-    "${VENV_PYTHON}" - "${PROJECT_ROOT}" "${HUNYUAN_MODEL_REPO}" <<'PY'
+    "${VENV_PYTHON}" - "${PROJECT_ROOT}" "${HUNYUAN_MODEL_REPO}" "${HUNYUAN_MV_MODEL_REPO}" <<'PY'
 import os
 import shutil
 import sys
@@ -218,6 +226,7 @@ from huggingface_hub import hf_hub_download, snapshot_download
 
 project_root = Path(sys.argv[1])
 repo_id = sys.argv[2]
+mv_repo_id = sys.argv[3]
 models_dir = project_root / "models"
 
 for filename, target in (
@@ -242,6 +251,20 @@ for filename, target in (
         shutil.copy2(source, target)
     print(f"Installed {filename} at {target}", flush=True)
 
+mv_filename = "split_files/hunyuan3d-dit-v2-mv_fp16.safetensors"
+mv_source = Path(hf_hub_download(repo_id=mv_repo_id, filename=mv_filename)).resolve()
+mv_target = models_dir / "checkpoints" / Path(mv_filename).name
+mv_target.parent.mkdir(parents=True, exist_ok=True)
+if mv_target.is_file() and mv_target.stat().st_size == mv_source.stat().st_size:
+    print(f"Using existing {mv_target}", flush=True)
+else:
+    mv_target.unlink(missing_ok=True)
+    try:
+        os.link(mv_source, mv_target)
+    except OSError:
+        shutil.copy2(mv_source, mv_target)
+    print(f"Installed {mv_filename} at {mv_target}", flush=True)
+
 snapshot_download(
     repo_id=repo_id,
     allow_patterns=["hunyuan3d-paintpbr-v2-1/*"],
@@ -252,6 +275,6 @@ snapshot_download(
     allow_patterns=["config.json", "preprocessor_config.json", "model.safetensors"],
     max_workers=1,
 )
-print("Hunyuan3D-2.1 shape, VAE, paint, and DINO models are ready.", flush=True)
+print("Hunyuan3D-2 multiview and Hunyuan3D-2.1 shape, VAE, paint, and DINO models are ready.", flush=True)
 PY
 fi
