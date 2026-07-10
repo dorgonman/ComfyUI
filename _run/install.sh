@@ -8,6 +8,10 @@ VENV_PYTHON="${VENV_DIR}/Scripts/python.exe"
 TRELLIS_DIR="${PROJECT_ROOT}/custom_nodes/ComfyUI-Trellis2"
 TRELLIS_REPO="https://github.com/visualbruno/ComfyUI-Trellis2.git"
 TRELLIS_PATCH="${SCRIPT_DIR}/addon/comfyui-trellis2-windows.patch"
+TRELLIS_TEMPLATE_NAME="TRELLIS2_Quick_Test_RTX3090.json"
+TRELLIS_TEMPLATE_SOURCE="${SCRIPT_DIR}/templates/${TRELLIS_TEMPLATE_NAME}"
+TRELLIS_SAMPLE_NAME="TRELLIS2_Quick_Test.png"
+TRELLIS_SAMPLE_SOURCE="${SCRIPT_DIR}/templates/assets/${TRELLIS_SAMPLE_NAME}"
 TORCH_INDEX_URL="https://download.pytorch.org/whl/cu128"
 
 if [[ ! -x "${VENV_PYTHON}" ]]; then
@@ -44,6 +48,25 @@ elif git -C "${TRELLIS_DIR}" apply --unidiff-zero --check "${TRELLIS_PATCH}"; th
 else
     echo "Cannot apply ${TRELLIS_PATCH}; inspect the extension changes before continuing." >&2
     exit 1
+fi
+
+if [[ -f "${TRELLIS_TEMPLATE_SOURCE}" ]]; then
+    TRELLIS_TEMPLATE_RELATIVE="example_workflows/${TRELLIS_TEMPLATE_NAME}"
+    TRELLIS_TEMPLATE_DEST="${TRELLIS_DIR}/${TRELLIS_TEMPLATE_RELATIVE}"
+    USER_WORKFLOW_DIR="${PROJECT_ROOT}/user/default/workflows"
+
+    mkdir -p "$(dirname -- "${TRELLIS_TEMPLATE_DEST}")" "${USER_WORKFLOW_DIR}"
+    cp -f "${TRELLIS_TEMPLATE_SOURCE}" "${TRELLIS_TEMPLATE_DEST}"
+    cp -f "${TRELLIS_TEMPLATE_SOURCE}" "${USER_WORKFLOW_DIR}/${TRELLIS_TEMPLATE_NAME}"
+
+    if ! grep -qxF "${TRELLIS_TEMPLATE_RELATIVE}" "${TRELLIS_DIR}/.git/info/exclude"; then
+        printf '%s\n' "${TRELLIS_TEMPLATE_RELATIVE}" >> "${TRELLIS_DIR}/.git/info/exclude"
+    fi
+fi
+
+if [[ -f "${TRELLIS_SAMPLE_SOURCE}" ]]; then
+    mkdir -p "${PROJECT_ROOT}/input"
+    cp -f "${TRELLIS_SAMPLE_SOURCE}" "${PROJECT_ROOT}/input/${TRELLIS_SAMPLE_NAME}"
 fi
 
 "${VENV_PYTHON}" --version
