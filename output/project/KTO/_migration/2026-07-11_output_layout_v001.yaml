@@ -1,0 +1,26 @@
+schema_version: 1
+migration_id: KTO_COMFY_OUTPUT_LAYOUT_20260711_v001
+policy: explicit_project_classification_only
+queue_state_before_move: empty
+moves:
+  - from: output/KTO/CHAR
+    to: output/project/KTO/character
+  - from: output/KTO/Control
+    to: output/project/KTO/control/legacy_v002
+  - from: output/Hunyuan21_DefaultTamao
+    to: output/project/KTO/model3d/Hunyuan21_DefaultTamao
+  - from: output/Hunyuan2MV_DefaultTamao
+    to: output/project/KTO/model3d/Hunyuan2MV_DefaultTamao
+  - from: output/DefaultTamao_L01_HeroBody_Hunyuan21_Textured_v001.glb
+    to: output/project/KTO/model3d/Hunyuan21_DefaultTamao/root_exports/DefaultTamao_L01_HeroBody_Hunyuan21_Textured_v001.glb
+  - from_glob: output/3d/*DefaultTamao*.glb
+    to: output/project/KTO/model3d/Trellis2_DefaultTamao
+left_in_place:
+  - output/ComfyUI_*
+  - output/comfyui-clora-depth_*
+  - output/logs
+  - output/playwright
+  - output/mesh
+  - output/trellis_preprocess
+  - output/3d files without an explicit KTO or DefaultTamao identifier
+reason: ownership cannot be inferred safely from generic filenames

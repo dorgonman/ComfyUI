@@ -1,0 +1,26 @@
+schema_version: 1
+asset_id: OUT-TAM-001_01_KeyVisual_SourceSheet
+project: KTO
+character: Tamao
+role: key_visual_source_sheet
+status: SourceReference
+immutable: true
+file: OUT-TAM-001_01_KeyVisual_SourceSheet.jpeg
+sha256: 8E5FDCBA06A9D812F1F686F2733A868CC1EB81920C8F8E6D79507ED2C78E130A
+width: 1448
+height: 1086
+source_path: E:/_gamedev/KanoTamaoProject/Studio/_AssetLab/BaseGame/00_Incubation/01_AI_Generated/Image/KeyVisual/Unsorted/OUT-TAM-001_01_KeyVisual_SourceSheet.jpeg
+contains:
+  - front outfit view
+  - strict side outfit view
+  - back outfit view
+  - three-quarter outfit view
+  - head close-up
+  - accessory and material details
+use_for:
+  - HeroBody_Bust identity extraction
+  - HeroBody_BodyCore silhouette and design-language extraction
+not_authoritative_for:
+  - hidden anatomy under the outfit
+  - exact orthographic body measurements
+  - final production geometry
